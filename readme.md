@@ -17,7 +17,7 @@
    - [oy-global-front 실행](#4-oy-global-front-실행)
 5. [아이콘 추가 및 생성](#-아이콘-추가-및-생성)
 6. [Storybook](#-storybook)
-   - [Storybook 배포](#-storybook-배포)
+   - [Storybook 배포](#storybook-배포)
 8. [Mock Service Worker (MSW)](#-mock-service-worker-msw)
 9. [배포](#-배포)
 10. [참고 문서](#-참고-문서)
