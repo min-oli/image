@@ -161,6 +161,7 @@ checkMFInitialized(() => {
 ### Storybook 배포
 
 - PR 생성 시 **Storybook Preview**가 자동 배포되며, 아래와 같이 PR 코멘트에 미리보기 링크가 표시됩니다.
+   <img width="522" height="222" alt="image" src="https://github.com/user-attachments/assets/5ce53142-826b-4cb4-9b9d-ead419ca13f3" />
 
   _(예: https://oyg-dev.github.io/oy-global-web/pr-713)_
 
