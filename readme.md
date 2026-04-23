@@ -1,194 +1,645 @@
-# oy-global-web
+# Release Branch Strategy
 
-# 📖 목차
+## 핵심 요약
 
-1. [프로젝트 개요](#-프로젝트-개요)
-2. [설치](#-설치)
-3. [실행](#-실행)
-   - [Static Remote 방식](#1-static-remote-방식)
-   - [Development Remote 방식 (HMR)](#2-development-remote-방식-hmr)
-   - [포트 설정](#3-포트-설정)
-4. [Legacy(JSP) 환경 로컬 실행](#-legacyjsp-환경-로컬-실행)
-   - [oy-global-web 실행](#1-oy-global-web-실행)
-   - [JSP 파일의 host 스크립트 URL 수정](#2-jsp-파일의-host-스크립트-url-수정)
-   - [JSP에서 remote 컴포넌트 로드](#3-jsp에서-remote-컴포넌트-로드)
-     - [방법 1: id/className 사용](#방법-1-id와-classname-사용)
-     - [방법 2: windowmf-객체-사용](#방법-2-windowmf-객체-사용)
-   - [oy-global-front 실행](#4-oy-global-front-실행)
-5. [아이콘 추가 및 생성](#-아이콘-추가-및-생성)
-6. [Storybook](#-storybook)
-   - [Storybook 배포](#storybook-배포)
-8. [Mock Service Worker (MSW)](#-mock-service-worker-msw)
-9. [배포](#-배포)
-10. [참고 문서](#-참고-문서)
+이 브랜치 전략의 목적은 개발 테스트는 자유롭게 하되, 실제 배포 후보는 엄격하게 관리하는 것이다.
 
-## 📌 프로젝트 개요
+```text
+모든 작업은 main에서 시작한다.
+개발 중 통합 테스트는 dev에서 자유롭게 한다.
+배포 후보는 release-yymmdd로만 모은다.
+QA, STG, PRD는 동일한 release-yymmdd 브랜치를 기준으로 순차 배포한다.
+```
 
-이 프로젝트는 Module Federation을 기반으로 하는 마이크로 프론트엔드 아키텍처를 사용합니다. `host`와 `host-legacy` 두 개의 컨테이너 애플리케이션을 중심으로, 각 기능별 `remote` 애플리케이션(예: `remote-home`, `remote-cart`)을 동적으로 로드합니다.
+전체 흐름은 다음과 같다.
 
-- **`host`**: 순수 React 환경을 위한 메인 애플리케이션입니다.
-- **`host-legacy`**: 기존 JSP 환경 위에서 React 컴포넌트를 렌더링하기 위한 브릿지 역할을 하는 애플리케이션입니다.
+```text
+feat/* -> dev
+feat/* -> release-yymmdd -> QA -> STG -> PRD -> main
+```
 
-현재 운영 중인 글로벌몰 서비스를 `host-legacy` 애플리케이션을 활용하여 점진적으로 마이그레이션 하고, 최종적으로는 `host` 애플리케이션으로 전부 마이그레이션하는 것이 목표입니다.
+`dev`는 배포 경로에 포함되지 않는다. `dev`는 개발 중 통합 테스트용 브랜치일 뿐이다.
 
-## 📌 설치
+## 브랜치 역할
 
-프로젝트 루트에서 아래 명령어를 실행하여 필요한 모든 패키지를 설치합니다.
+### main
+
+`main`은 운영 환경의 기준 브랜치다.
+
+- 운영 배포가 완료된 최종 코드만 존재한다.
+- 모든 기능 브랜치는 `main`에서 생성한다.
+- 직접 push를 금지한다.
+- 평소 개발자가 직접 수정하지 않는다.
+- `release-yymmdd` 또는 `hotfix/*`를 통해서만 변경된다.
+
+### release-yymmdd
+
+`release-yymmdd`는 이번 배포의 후보 브랜치다.
+
+- 매주 정해진 요일에 최신 `main` 기준으로 생성한다.
+- 이번 배포에 포함될 기능만 PR로 머지한다.
+- QA, STG, PRD는 모두 동일한 `release-yymmdd` 기준으로 배포한다.
+- PRD 배포 완료 후 `main`에 머지한다.
+- 직접 push를 금지한다.
+
+예:
+
+```text
+release-260427
+```
+
+### dev
+
+`dev`는 개발 중 통합 테스트용 브랜치다.
+
+- 개발자가 `feat/*`를 임시로 머지해서 Dev 서버에서 확인하는 용도다.
+- 배포 후보로 간주하지 않는다.
+- QA, STG, PRD 배포에 사용하지 않는다.
+- 매주 PRD 배포 완료 후 최신 `main` 기준으로 reset한다.
+
+중요한 코드는 반드시 `feat/*` 브랜치에 보관해야 한다. `dev`는 주기적으로 초기화될 수 있다.
+
+### feat/[ticket]
+
+`feat/[ticket]`은 개별 기능 개발 브랜치다.
+
+- 반드시 `main`에서 생성한다.
+- 개발 중 Dev 서버 확인이 필요하면 `dev`로 머지한다.
+- 배포가 확정되면 `release-yymmdd`로 PR을 올린다.
+- `dev`나 `release-yymmdd`의 변경사항을 원본 `feat/*`로 가져오지 않는다.
+
+예:
+
+```text
+feat/ABC-123
+feat/OYG-456
+```
+
+### fix/[ticket]
+
+`fix/[ticket]`은 QA, STG 또는 release 통합 과정에서 발견된 문제를 수정하는 브랜치다.
+
+- 일반적으로 `main`에서 생성한다.
+- release에 합쳐진 뒤에만 발생하는 통합 문제라면 `release-yymmdd`에서 생성할 수 있다.
+- 수정 후 `release-yymmdd`로 PR을 올린다.
+- `release-yymmdd`에 직접 커밋하지 않는다.
+
+예:
+
+```text
+fix/ABC-123-qa-bug
+fix/release-260427-payment-issue
+```
+
+### hotfix/[ticket]
+
+`hotfix/[ticket]`은 운영 긴급 수정 브랜치다.
+
+- 반드시 `main`에서 생성한다.
+- 검증 후 `main`으로 PR을 올린다.
+- 운영 배포 후 현재 진행 중인 `release-yymmdd`와 `dev`에도 반영한다.
+
+예:
+
+```text
+hotfix/ABC-999
+```
+
+## 기본 개발 및 배포 흐름
+
+### 1. 기능 개발 시작
+
+최신 `main`에서 기능 브랜치를 생성한다.
 
 ```bash
-yarn install
+git fetch origin
+git checkout -b feat/ABC-123 origin/main
 ```
 
-## 📌 실행
+### 2. Dev 서버 테스트
 
-개발 환경에서는 두 가지 방식으로 서버를 실행할 수 있습니다.
+개발 중 통합 테스트가 필요하면 `feat/*`를 `dev`로 머지한다.
 
-### 1. Static Remote 방식
+```text
+feat/ABC-123 -> dev
+```
 
-`host` 앱만 단독으로 실행하여 개발을 진행합니다. 이 방식은 `remote` 앱들의 빌드된 결과물을 정적으로 제공받아 사용하므로, `remote` 앱을 별도로 실행할 필요가 없습니다. `host` 자체의 UI나 로직 개발에 집중할 때 유용합니다.
+`dev`는 자유롭게 테스트하는 공간이다. 단, `dev`의 변경사항을 다시 `feat/*`로 가져오면 안 된다.
+
+### 3. release PR 생성
+
+배포가 확정된 기능만 `release-yymmdd`로 PR을 올린다.
+
+```text
+feat/ABC-123 -> release-260427
+```
+
+### 4. QA 배포
+
+`release-yymmdd` 브랜치를 기준으로 QA 환경에 배포한다.
+
+```text
+release-260427 -> QA
+```
+
+### 5. STG 배포
+
+QA를 통과한 동일한 `release-yymmdd` 브랜치를 STG 환경에 배포한다.
+
+```text
+release-260427 -> STG
+```
+
+### 6. PRD 배포
+
+STG를 통과한 동일한 `release-yymmdd` 브랜치를 PRD 환경에 배포한다.
+
+```text
+release-260427 -> PRD
+```
+
+### 7. main 반영
+
+PRD 배포가 완료되면 `release-yymmdd`를 `main`에 머지한다.
+
+```text
+release-260427 -> main
+```
+
+### 8. dev 초기화
+
+배포 완료 후 `dev`는 최신 `main` 기준으로 reset한다.
+
+```text
+dev = main
+```
+
+## 케이스별 흐름 그림
+
+### 케이스 1. 정상 기능 개발 및 배포
+
+기능은 `main`에서 시작하고, 개발 중 확인은 `dev`에서 하며, 실제 배포 후보는 `release-yymmdd`에 모은다.
+
+```text
+main
+  |
+  | 1. feat 브랜치 생성
+  v
+feat/ABC-123
+  |
+  | 2. 개발 중 Dev 서버 확인
+  v
+dev
+  |
+  | dev는 테스트장일 뿐, 배포 경로에 포함되지 않음
+  |
+  +------------------------------------+
+                                       |
+feat/ABC-123                          |
+  |                                    |
+  | 3. 배포 확정 후 PR                 |
+  v                                    |
+release-260427                        |
+  |                                    |
+  | 4. 동일 브랜치로 순차 배포         |
+  v                                    |
+QA -> STG -> PRD                      |
+  |                                    |
+  | 5. 배포 완료 후 main 반영          |
+  v                                    |
+main                                  |
+  |                                    |
+  | 6. dev 초기화                      |
+  +-----------------------------------> dev = main
+```
+
+요약:
+
+```text
+main -> feat/* -> release-yymmdd -> QA -> STG -> PRD -> main
+             \
+              -> dev
+```
+
+### 케이스 2. release PR 충돌
+
+`feat/ABC-123`를 `release-260427`에 넣으려는데 이미 먼저 머지된 기능과 충돌이 나는 상황이다.
+
+```text
+main
+  |
+  +--------------------+
+  |                    |
+  v                    v
+feat/AAA-111       feat/ABC-123
+  |                    |
+  | 먼저 머지          | release PR 충돌
+  v                    |
+release-260427 <-------+
+```
+
+이때 원본 `feat/ABC-123`에 `release-260427`을 머지하지 않는다.
+
+잘못된 처리:
+
+```text
+release-260427
+      |
+      | 금지: release를 원본 feat로 머지
+      v
+feat/ABC-123
+```
+
+올바른 처리:
+
+```text
+release-260427
+  |
+  | 1. release 기준 임시 브랜치 생성
+  v
+merge/ABC-123-into-release-260427
+  |
+  | 2. feat 변경분을 이 브랜치로 머지
+  v
+merge/ABC-123-into-release-260427
+  |
+  | 3. 충돌 해결 후 PR
+  v
+release-260427
+
+feat/ABC-123
+  |
+  | 원본 feat는 깨끗하게 유지
+  v
+feat/ABC-123
+```
+
+최종 PR 방향:
+
+```text
+merge/ABC-123-into-release-260427 -> release-260427
+```
+
+### 케이스 3. QA 또는 STG 중 버그 수정
+
+`release-260427`이 QA 또는 STG에 올라간 뒤 버그가 발견된 상황이다.
+
+```text
+release-260427
+  |
+  v
+QA
+  |
+  | 버그 발견
+  v
+fix/ABC-123-qa-bug
+  |
+  | 수정 후 PR
+  v
+release-260427
+  |
+  | 다시 배포 및 검증
+  v
+QA -> STG -> PRD
+```
+
+원칙:
+
+```text
+release-260427에 직접 커밋하지 않는다.
+fix/* 브랜치에서 수정하고 release-260427로 PR을 올린다.
+```
+
+### 케이스 4. 이번 배포에서 기능 제외
+
+`release-260427`에 A, B, C 기능이 들어갔는데 C 기능을 이번 배포에서 제외해야 하는 상황이다.
+
+현재 상태:
+
+```text
+main
+  |
+  v
+release-260427
+  |
+  +-- feat/A 포함
+  +-- feat/B 포함
+  +-- feat/C 포함
+
+결정: feat/C는 이번 배포 제외
+```
+
+원칙적인 처리:
+
+```text
+main
+  |
+  | 1. release 브랜치 재생성
+  v
+release-260427
+  |
+  | 2. 배포할 기능만 다시 반영
+  +-- feat/A 머지
+  +-- feat/B 머지
+  |
+  | feat/C는 제외
+  v
+QA -> STG -> PRD
+```
+
+예외적인 처리:
+
+```text
+release-260427
+  |
+  | QA 후반 또는 STG 이후라 재생성이 부담되는 경우
+  v
+revert feat/C
+  |
+  | 전체 회귀 테스트
+  v
+QA -> STG -> PRD
+```
+
+기본 선택지는 `release` 재생성이고, `revert`는 예외적으로만 사용한다.
+
+### 케이스 5. 운영 hotfix
+
+운영 장애 또는 긴급 수정은 `main`에서 시작한다.
+
+```text
+main
+  |
+  | 1. 긴급 수정 브랜치 생성
+  v
+hotfix/ABC-999
+  |
+  | 2. 검증 후 PR
+  v
+main
+  |
+  | 3. 운영 배포
+  v
+PRD
+```
+
+현재 진행 중인 release와 dev가 있다면 hotfix를 다시 반영한다.
+
+```text
+hotfix/ABC-999
+  |
+  +--> main
+  |
+  +--> release-260427
+  |
+  +--> dev
+```
+
+## 허용되는 브랜치 흐름
+
+```text
+feat/* -> dev
+feat/* -> release-yymmdd
+fix/* -> release-yymmdd
+release-yymmdd -> main
+hotfix/* -> main
+hotfix/* -> release-yymmdd
+hotfix/* -> dev
+```
+
+## 금지되는 브랜치 흐름
+
+```text
+dev -> feat/*
+dev -> release-yymmdd
+dev -> main
+release-yymmdd -> feat/*
+feat/* -> main
+main 직접 push
+release-yymmdd 직접 push
+```
+
+특히 아래 규칙은 반드시 지킨다.
+
+```text
+dev에서 테스트했다고 dev 코드를 feat 브랜치로 가져오지 않는다.
+release 충돌을 해결한다고 원본 feat 브랜치에 release를 머지하지 않는다.
+```
+
+## release 충돌 처리
+
+`feat/*`를 `release-yymmdd`에 PR 했는데 충돌이 발생하면 원본 `feat/*` 브랜치에서 해결하지 않는다.
+
+원칙:
+
+```text
+release 충돌은 release 기준의 임시 merge 브랜치에서 해결한다.
+원본 feat 브랜치는 깨끗하게 유지한다.
+```
+
+예:
+
+```text
+원본 브랜치: feat/ABC-123
+배포 브랜치: release-260427
+충돌 해결 브랜치: merge/ABC-123-into-release-260427
+```
+
+처리 흐름:
 
 ```bash
-nx serve host
-# 또는
-nx serve host-legacy
+git fetch origin
+git checkout -b merge/ABC-123-into-release-260427 origin/release-260427
+git merge origin/feat/ABC-123
 ```
 
-### 2. Development Remote 방식 (HMR)
-
-`host`와 특정 `remote` 앱들을 동시에 실행하여 함께 개발을 진행합니다. 이 방식은 HMR(Hot Module Replacement)을 지원하여, `remote` 앱의 코드를 수정하면 페이지 전체를 새로고침하지 않고도 변경 사항이 `host`에 실시간으로 반영됩니다. 여러 모듈에 걸친 기능을 통합 개발할 때 유용합니다.
-
-`--devRemotes` 플래그에 원하는 `remote` 앱 이름을 쉼표로 구분하여 전달합니다.
+충돌을 해결한 뒤:
 
 ```bash
-# host와 remote-home, remote-cart를 함께 실행
-nx serve host --devRemotes=remote-home,remote-cart
-
-# host-legacy와 remote-home, remote-cart를 함께 실행
-nx serve host-legacy --devRemotes=remote-home,remote-cart
+git add .
+git commit
+git push origin merge/ABC-123-into-release-260427
 ```
 
-### 3. 포트 설정
+이후 PR을 다시 생성한다.
 
-로컬 개발 시 각 애플리케이션은 다음 포트를 사용합니다.
-
-| 애플리케이션          | Development Mode | Static Mode |
-| --------------------- | ---------------- | ----------- |
-| `host`, `host-legacy` | `4200`           | `4200`      |
-| `remote-home`         | `4201`           | `4100`      |
-| `remote-cart`         | `4202`           | `4100`      |
-| `remote-account`      | `4203`           | `4100`      |
-| `remote-support`      | `4204`           | `4100`      |
-
-## 📌 Legacy(JSP) 환경 로컬 실행
-
-`host-legacy`는 기존 JSP 기반의 `oy-global-front` 프로젝트 위에서 React 리모트 컴포넌트를 렌더링하기 위해 사용됩니다. 로컬에서 JSP 페이지에 리모트 컴포넌트가 올바르게 표시되는지 확인하려면 다음 단계를 따르세요.
-
-### 1. oy-global-web 실행
-
-### 2. JSP 파일의 host 스크립트 URL 수정
-
-JSP 페이지에 `host-legacy`의 JavaScript 파일을 로드하는 스크립트 주소를 로컬용으로 변경합니다.
-
-**AS-IS**
-
-```html
-<script type="module" src="${Const.MF_CDN_URL}/host-legacy/main.js?v=<%= System.currentTimeMillis() %>"></script>
+```text
+merge/ABC-123-into-release-260427 -> release-260427
 ```
 
-**TO-BE**
+이 방식의 목적:
 
-```html
-<script type="module" src="http://localhost:4200/main.js"></script>
-<script type="module" src="http://localhost:4200/runtime.js"></script>
+- `feat/*` 브랜치를 오염시키지 않는다.
+- 실제 배포 후보인 `release-yymmdd` 기준으로 충돌을 해결한다.
+- 충돌 해결 내용이 PR에 드러난다.
+- 문제가 생기면 `merge/*` 브랜치만 버리면 된다.
+
+## QA 또는 STG 중 버그 수정
+
+QA 또는 STG에서 버그가 발견되어도 `release-yymmdd`에 직접 커밋하지 않는다.
+
+원칙:
+
+```text
+모든 수정은 fix 브랜치에서 작업하고 release-yymmdd로 PR을 올린다.
 ```
 
-> **⚠️** 배포 시에는 `runtime.js`를 제거하고, 스크립트 주소를 다시 `${Const.MF_CDN_URL}`로 원복해야 합니다.
+기능 자체의 버그라면:
 
-### 3. JSP에서 remote 컴포넌트 로드
-
-`host-legacy`는 두 가지 방법으로 remote 컴포넌트를 로드하고 렌더링합니다.
-
-#### 방법 1: id와 className 사용
-
-`div` 태그에 `remoteName/moduleName` 형식의 id와 `remote-component` class를 추가하면 `div` 태그 하위에 remote 컴포넌트가 렌더링됩니다.
-
-```html
-<div id="remote-home/KPopSection" class="remote-component">
-  <!-- KPopSection 컴포넌트가 여기에 렌더링됩니다. -->
-</div>
+```text
+fix/ABC-123-qa-bug -> release-260427
 ```
 
-#### 방법 2: `window.mf` 객체 사용
+release에 합쳐진 뒤에만 발생하는 통합 문제라면:
 
-`window.mf` 객체에 정의된 함수를 직접 호출하여 컴포넌트를 렌더링하는 방식입니다. Vue 환경과의 호환성 이슈를 해결하기 위해 추가되었습니다.
-
-```javascript
-const checkMFInitialized = callback => {
-  if (window.mf?.renderRemoteComponent) {
-    callback();
-  } else {
-    // 'mf-initialized' 이벤트는 host-legacy가 준비되면 발생합니다.
-    document.addEventListener('mf-initialized', callback);
-  }
-};
-
-checkMFInitialized(() => {
-  // window.mf.renderRemoteComponent(
-  //   '렌더링될_엘리먼트_ID',
-  //   '리모트_앱_이름',
-  //   '컴포넌트_이름'
-  // );
-  window.mf.renderRemoteComponent('recommendation-product-list', 'remote-home', 'RecommendationProductList');
-});
+```text
+fix/release-260427-integration-issue -> release-260427
 ```
 
-- `host-legacy` 로드가 완료되면 `window.mf` 객체에 `renderRemoteComponent` 함수가 정의되고 `mf-initialized` 커스텀 이벤트가 발생합니다.
-- 위 예제처럼 이벤트 리스너를 등록하거나 `window.mf` 객체를 확인하여 원하는 시점에 컴포넌트 렌더링을 트리거할 수 있습니다.
+## 배포 제외 처리
 
-### 4. oy-global-front 실행
+`release-yymmdd`에 여러 기능이 들어간 뒤 특정 기능을 이번 배포에서 제외해야 할 수 있다.
 
-## 📌 아이콘 추가 및 생성
+예:
 
-1.  `libs/shared/components/src/assets/icons` 디렉터리에 새로운 `.svg` 파일을 추가합니다.
-2.  아래 명령어를 실행하여 아이콘 컴포넌트를 자동으로 생성합니다.
+```text
+release-260427에 A, B, C 기능이 들어감
+C 기능은 이슈로 인해 이번 배포에서 제외 결정
+```
 
-    ```bash
-    nx generate-icons components
-    ```
+기본 원칙:
 
-## 📌 Storybook
+```text
+release 브랜치를 최신 main 기준으로 다시 만들고, 배포할 기능만 다시 머지한다.
+```
 
-### Storybook 배포
+즉, A와 B만 다시 반영한다.
 
-- PR 생성 시 **Storybook Preview**가 자동 배포되며, 아래와 같이 PR 코멘트에 미리보기 링크가 표시됩니다.
-   <img width="522" height="222" alt="image" src="https://github.com/user-attachments/assets/5ce53142-826b-4cb4-9b9d-ead419ca13f3" />
+```text
+main -> release-260427 재생성
+feat/A -> release-260427
+feat/B -> release-260427
+```
 
-  _(예: https://oyg-dev.github.io/oy-global-web/pr-713)_
+예외적으로 QA 후반 또는 STG 이후라면 `revert`를 사용할 수 있다.
 
-- PR이 **머지되면**, 해당 Preview Storybook은 자동으로 **정리(삭제)** 됩니다.
+단, `revert`는 다음 조건을 만족할 때만 사용한다.
 
-- `main` 브랜치에 머지되면, 최신 Storybook이 자동으로 아래 경로에 배포됩니다.  
-  🔗 [https://oyg-dev.github.io/oy-global-web/main](https://oyg-dev.github.io/oy-global-web/main)
+- 제외할 기능이 다른 기능과 강하게 얽혀 있지 않다.
+- DB migration, 설정 변경, feature flag가 독립적이다.
+- revert 후 전체 회귀 테스트가 가능하다.
+- 릴리즈 담당자가 승인했다.
 
-## 📌 Mock Service Worker (MSW)
+## release에 머지하는 기준
 
-API 모킹이 필요한 경우, MSW를 사용하여 개발할 수 있습니다.
+`release-yymmdd`에는 이번 배포가 확정된 기능만 머지한다.
 
-1.  `libs/shared/mocks` 디렉터리에 새로운 핸들러(handler)를 추가합니다.
-2.  `MSW=true` 환경 변수와 함께 개발 서버를 실행합니다.
+권장 기준:
 
-    ```bash
-    MSW=true nx serve host-legacy --devRemotes=remote-home,remote-cart
-    ```
+- Dev 서버에서 기본 동작 확인이 끝났다.
+- 이번 배포 포함 여부가 확정됐다.
+- QA 시나리오가 준비됐다.
+- DB migration 영향이 확인됐다.
+- 배포 제외가 필요할 경우 영향 범위를 설명할 수 있다.
 
-## 📌 배포
+불확실한 기능은 `dev`에서만 테스트하고 `release-yymmdd`에는 늦게 머지한다.
 
-- **Development (dev)**: `main` 브랜치에 Pull Request가 머지되면 자동으로 개발 환경에 배포됩니다.
-- **Staging (stg) / Production (prd)**: 스테이징 및 운영 환경 배포는 필요시 GitHub Actions의 `manual-ci-cd` 워크플로우를 통해 수동으로 실행해야 합니다. (**⚠️**: `module-deploy` 워크플로우는 사용하지 마세요.)
+## 시스템으로 강제할 규칙
 
-## 🔗 참고 문서
+문서만으로는 실수를 막기 어렵다. 아래 규칙은 GitHub, GitLab, CI 또는 배포 시스템에서 강제하는 것을 권장한다.
 
-- [글로벌프로덕트개발팀 Frontend 개발 컨벤션](https://oyitsm.cj.net/confluence/pages/viewpage.action?pageId=561366282)
-- [BFF Home Screen Service Swagger](https://dev-bff-home-screen.oliveyoung.com/swagger-ui/index.html)
-- [OYG Design System MO](https://www.figma.com/design/qsI8dRZRkyyYI5NIlTtjxM/Components-MO?node-id=0-1&p=f&t=ZmlBYM2QPuo5FhkX-0)
-- [OYG Design System PC](https://www.figma.com/design/3cXG9najSHKHzzX6DRh0u2/Components-PC?node-id=0-1&p=f&t=DHDUOwVUl6MopFap-0)
+### 브랜치 보호
+
+`main`:
+
+- 직접 push 금지
+- PR 필수
+- required checks 필수
+- 승인 필수
+- force push 금지
+
+`release-*`:
+
+- 직접 push 금지
+- PR 필수
+- required checks 필수
+- release manager 승인 필수
+- force push 금지
+
+`dev`:
+
+- 팀 정책에 따라 직접 push 또는 PR 방식을 선택한다.
+- force push는 관리자 또는 릴리즈 담당자만 허용한다.
+
+### PR 방향 검사
+
+CI에서 PR source/target branch 조합을 검사한다.
+
+허용:
+
+```text
+feat/* -> dev
+feat/* -> release-*
+fix/* -> release-*
+release-* -> main
+hotfix/* -> main
+hotfix/* -> release-*
+hotfix/* -> dev
+```
+
+그 외 흐름은 실패 처리한다.
+
+### release 브랜치 자동 생성
+
+매주 정해진 요일에 최신 `main` 기준으로 `release-yymmdd` 브랜치를 자동 생성한다.
+
+예:
+
+```text
+매주 월요일 오전 10시
+main 기준 release-260427 생성
+릴리즈 채널에 공지
+```
+
+### dev 초기화 자동화
+
+PRD 배포 완료 후 `dev`를 최신 `main` 기준으로 reset한다.
+
+```text
+PRD 배포 완료
+release-yymmdd -> main 머지
+dev = main
+```
+
+### release 충돌 해결 스크립트
+
+release 충돌 처리는 스크립트로 제공하는 것을 권장한다.
+
+예:
+
+```bash
+./scripts/resolve-release-conflict.sh feat/ABC-123 release-260427
+```
+
+개발자는 충돌 발생 시 아래 원칙만 따르면 된다.
+
+```text
+release 충돌 = 충돌 해결 스크립트 실행
+원본 feat 브랜치는 수정하지 않음
+생성된 merge/* 브랜치로 release에 PR 생성
+```
+
+## 최종 원칙
+
+```text
+main은 운영 원본이다.
+dev는 개발 테스트장이다.
+release-yymmdd는 배포 기차다.
+feat/*는 개인 작업장이다.
+
+시작은 main에서 한다.
+실험은 dev에서 한다.
+배포는 release-yymmdd로 한다.
+배포 완료 후 main에 반영한다.
+dev는 주기적으로 main 기준으로 초기화한다.
+```
